@@ -1,0 +1,84 @@
+{
+  "study_id": "STUDY-001",
+  "protocol_text": "Inclusion Criteria:\n- Age >= 18\n- Diagnosis of Type 2 Diabetes\n\nExclusion Criteria:\n- eGFR < 30 mL/min",
+  "cases": [
+    {
+      "patient": {
+        "patient_id": "P001",
+        "age": 45,
+        "sex": "female",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": ["Metformin"],
+        "lab_values": {"eGFR": 65.0},
+        "notes": "Well-controlled, no complications reported."
+      },
+      "expected_eligible": true,
+      "description": "Clear positive case: adult, correct diagnosis, healthy kidney function."
+    },
+    {
+      "patient": {
+        "patient_id": "P002",
+        "age": 16,
+        "sex": "male",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": [],
+        "lab_values": {"eGFR": 90.0},
+        "notes": "Pediatric patient."
+      },
+      "expected_eligible": false,
+      "description": "Fails age inclusion criterion (under 18)."
+    },
+    {
+      "patient": {
+        "patient_id": "P003",
+        "age": 60,
+        "sex": "male",
+        "diagnosis": ["Hypertension"],
+        "medications": ["Lisinopril"],
+        "lab_values": {"eGFR": 70.0},
+        "notes": "No diabetes diagnosis on record."
+      },
+      "expected_eligible": false,
+      "description": "Fails diagnosis inclusion criterion (no Type 2 Diabetes)."
+    },
+    {
+      "patient": {
+        "patient_id": "P004",
+        "age": 55,
+        "sex": "female",
+        "diagnosis": ["Type 2 Diabetes", "Chronic Kidney Disease"],
+        "medications": ["Insulin"],
+        "lab_values": {"eGFR": 22.0},
+        "notes": "Advanced renal impairment."
+      },
+      "expected_eligible": false,
+      "description": "Triggers exclusion criterion (eGFR below 30)."
+    },
+    {
+      "patient": {
+        "patient_id": "P005",
+        "age": 70,
+        "sex": "male",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": ["Metformin", "Atorvastatin"],
+        "lab_values": {"eGFR": 31.0},
+        "notes": "Borderline renal function, just above exclusion threshold."
+      },
+      "expected_eligible": true,
+      "description": "Edge case: eGFR just above the exclusion cutoff."
+    },
+    {
+      "patient": {
+        "patient_id": "P006",
+        "age": 18,
+        "sex": "female",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": ["Metformin"],
+        "lab_values": {"eGFR": 80.0},
+        "notes": "Just turned 18 this year."
+      },
+      "expected_eligible": true,
+      "description": "Edge case: exactly at the minimum age boundary."
+    }
+  ]
+}

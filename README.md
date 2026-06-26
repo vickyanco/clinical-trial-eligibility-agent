@@ -65,9 +65,10 @@ patient records, assessments, final verdict) are defined in
 ```
 clinical-trial-eligibility-agent/
 ├── src/
-│   ├── schemas.py     # Pydantic models: the structured contracts
-│   ├── agent.py        # LangGraph agent: extraction, assessment, aggregation
-│   └── api.py           # FastAPI service exposing the agent
+│   ├── schemas.py        # Pydantic models: the structured contracts
+│   ├── agent.py          # LangGraph agent: extraction, assessment, aggregation
+│   ├── api.py             # FastAPI service exposing the agent over REST
+│   └── mcp_server.py       # MCP server exposing the agent as an MCP tool
 ├── eval/
 │   ├── test_cases.json  # Hand-crafted test patients, incl. edge cases
 │   └── evaluate.py        # Evaluation harness: accuracy + review-flag rate
@@ -103,6 +104,21 @@ uvicorn api:app --reload
 ```
 
 Visit `http://127.0.0.1:8000/docs` for interactive API documentation.
+
+### Run the MCP server
+ 
+The same agent logic is also exposed as an [MCP](https://modelcontextprotocol.io/)
+tool, so it can be called directly by any MCP-compatible client (e.g.
+Claude Desktop) as part of a larger agentic workflow:
+ 
+```bash
+cd src
+mcp dev mcp_server.py
+```
+ 
+This registers a single tool, `assess_patient_eligibility`, with the
+same inputs/outputs as the REST endpoint -- MCP and REST are just two
+different interfaces wrapping the same underlying LangGraph agent.
 
 ### Use a real LLM (optional, free tier)
 
@@ -161,6 +177,26 @@ particular:
   out of scope here to keep the project focused on the agentic
   reasoning and evaluation design.
 
+### Run with Docker
+ 
+```bash
+docker build -t eligibility-agent .
+docker run -p 8000:8000 eligibility-agent
+```
+ 
+Then visit `http://localhost:8000/docs`. To use a real Gemini model
+inside the container instead of the mock:
+ 
+```bash
+docker run -p 8000:8000 -e GEMINI_API_KEY=your-key-here eligibility-agent
+```
+ 
 ## Tech stack
-
-Python · LangGraph · Pydantic · FastAPI · Google Gemini API
+ 
+Python · LangGraph · Pydantic · FastAPI · MCP (Model Context Protocol) · Docker · Google Gemini API
+ 
+## Possible next steps
+ 
+- **AG-UI protocol**: expose this agent's multi-step reasoning (extraction → assessment → aggregation) as a streamed, event-based interface using the [AG-UI protocol](https://docs.ag-ui.com/), so a frontend could show live progress instead of waiting for a single final response.
+- **Real confidence calibration**: replace the illustrative confidence scores with a properly validated calibration approach.
+- **vLLM-served open models**: swap the Gemini call for a self-hosted model served via vLLM, for environments where data cannot leave a private network.
