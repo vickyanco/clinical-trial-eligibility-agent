@@ -122,6 +122,30 @@ This registers a single tool, `assess_patient_eligibility`, with the
 same inputs/outputs as the REST endpoint -- MCP and REST are just two
 different interfaces wrapping the same underlying LangGraph agent.
 
+### Run the AG-UI streaming endpoint
+
+The agent's three-step reasoning (extract → assess → aggregate) can
+also be streamed as [AG-UI protocol](https://docs.ag-ui.com/) events,
+so a frontend can show live per-step progress instead of waiting for
+one final response:
+
+```bash
+cd src
+uvicorn api:app --reload
+```
+
+```bash
+curl -N -H "Accept: text/event-stream" -H "Content-Type: application/json" \
+  -X POST http://127.0.0.1:8000/assess/stream \
+  -d '{"study_id":"STUDY-001","protocol_text":"Inclusion: Age >= 18, Diagnosis of Type 2 Diabetes. Exclusion: eGFR < 30 mL/min.","patient":{"patient_id":"P001","age":45,"sex":"female","diagnosis":["Type 2 Diabetes"],"lab_values":{"eGFR":65.0}}}'
+```
+
+This emits `RUN_STARTED`, then `STEP_STARTED` / `STATE_SNAPSHOT` /
+`STEP_FINISHED` for each of `extract_criteria`, `assess_criteria`, and
+`aggregate_verdict`, then `RUN_FINISHED` with the same
+`EligibilityVerdict` the `/assess` endpoint returns synchronously --
+same underlying agent, third interface, this time streamed.
+
 ### Use a real LLM (optional, free tier)
 
 This project uses [Google Gemini](https://ai.google.dev/) for real LLM
@@ -182,6 +206,12 @@ particular:
   all essential for any real clinical data pipeline, intentionally
   out of scope here to keep the project focused on the agentic
   reasoning and evaluation design.
+- The `/assess/stream` endpoint emits standard AG-UI events but
+  accepts this project's existing domain-specific request body rather
+  than the generic `RunAgentInput` (thread/messages/tools) shape,
+  since this agent's input (protocol text + structured patient record)
+  doesn't map naturally onto a chat-message history. A generic
+  AG-UI/CopilotKit frontend would need a thin adapter to call it.
 
 ### Run with Docker
  
@@ -199,10 +229,9 @@ docker run -p 8000:8000 -e GEMINI_API_KEY=your-key-here eligibility-agent
  
 ## Tech stack
  
-Python · LangGraph · Pydantic · FastAPI · MCP (Model Context Protocol) · Docker · Google Gemini API
+Python · LangGraph · Pydantic · FastAPI · MCP (Model Context Protocol) · AG-UI protocol · Docker · Google Gemini API
  
 ## Possible next steps
  
-- **AG-UI protocol**: expose this agent's multi-step reasoning (extraction → assessment → aggregation) as a streamed, event-based interface using the [AG-UI protocol](https://docs.ag-ui.com/), so a frontend could show live progress instead of waiting for a single final response.
 - **Real confidence calibration**: replace the illustrative confidence scores with a properly validated calibration approach.
 - **vLLM-served open models**: swap the Gemini call for a self-hosted model served via vLLM, for environments where data cannot leave a private network.
