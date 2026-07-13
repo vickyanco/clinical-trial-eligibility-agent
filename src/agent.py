@@ -75,12 +75,18 @@ def _mock_llm(prompt: str) -> str:
             {"criterion_id": "EXC-1", "type": "exclusion", "description": "eGFR < 30 mL/min"},
         ])
     if "ASSESS_CRITERION" in prompt:
-        # Naive mock assessment: looks for simple keyword matches in the prompt
+        # Naive mock assessment: reads the match/confidence hint embedded in
+        # the prompt by _rule_based_assessment(). A real model would derive
+        # both from reasoning over the criterion and patient record directly.
         met = "MATCH_TRUE" in prompt
+        confidence = 0.6
+        for line in prompt.splitlines():
+            if line.startswith("CONFIDENCE="):
+                confidence = float(line.removeprefix("CONFIDENCE="))
         return json.dumps({
             "met": met,
             "evidence": "Mock evidence based on keyword match in patient record",
-            "confidence": 0.6,
+            "confidence": confidence,
         })
     return "{}"
 
@@ -115,12 +121,13 @@ def assess_criteria(state: AgentState) -> AgentState:
     assessments: list[CriterionAssessment] = []
 
     for criterion in state["criteria"]:
-        match_hint = _rule_based_match_hint(criterion, patient)
+        met_hint, confidence_hint = _rule_based_assessment(criterion, patient)
         prompt = (
             f"ASSESS_CRITERION\n"
             f"Criterion: {criterion.description}\n"
             f"Patient: {patient.model_dump_json()}\n"
-            f"{'MATCH_TRUE' if match_hint else 'MATCH_FALSE'}"
+            f"{'MATCH_TRUE' if met_hint else 'MATCH_FALSE'}\n"
+            f"CONFIDENCE={confidence_hint}"
         )
         raw = llm_call(prompt)
         parsed = json.loads(raw)
@@ -151,9 +158,12 @@ def aggregate_verdict(state: AgentState) -> AgentState:
     ]
 
     eligible = len(failed_inclusions) == 0 and len(met_exclusions) == 0
-    overall_confidence = (
-        sum(a.confidence for a in assessments) / len(assessments) if assessments else 0.0
-    )
+    # Weakest-link, not average: a verdict is only as trustworthy as its
+    # least confident supporting assessment. Averaging would let one shaky
+    # criterion (e.g. a lab value right at the exclusion cutoff) hide behind
+    # two confident ones -- the wrong failure mode for a regulated, human-
+    # reviewed workflow.
+    overall_confidence = min((a.confidence for a in assessments), default=0.0)
 
     reasons = []
     for a in failed_inclusions:
@@ -175,24 +185,51 @@ def aggregate_verdict(state: AgentState) -> AgentState:
     return state
 
 
-def _rule_based_match_hint(criterion: EligibilityCriterion, patient: PatientRecord) -> bool:
+HIGH_CONFIDENCE = 0.92
+MEDIUM_CONFIDENCE = 0.8
+LOW_CONFIDENCE = 0.55  # below CONFIDENCE_THRESHOLD -- forces human review
+
+
+def _confidence_from_margin(margin: float) -> float:
+    """
+    Maps distance from a numeric threshold to a confidence tier. The
+    closer a value sits to the cutoff, the more a real-world assessment
+    hinges on measurement noise or borderline judgment calls -- exactly
+    the case a human reviewer should see, not one the agent should
+    quietly paper over with a flat confidence score.
+    """
+    margin = abs(margin)
+    if margin <= 1:
+        return LOW_CONFIDENCE
+    if margin <= 3:
+        return MEDIUM_CONFIDENCE
+    return HIGH_CONFIDENCE
+
+
+def _rule_based_assessment(criterion: EligibilityCriterion, patient: PatientRecord) -> tuple[bool, float]:
     """
     Lightweight heuristic used only to steer the mock LLM toward a
-    plausible answer during offline testing. A real model call would
-    reason over the criterion text directly instead of relying on this.
+    plausible (met, confidence) answer during offline testing. A real
+    model call would reason over the criterion text directly instead of
+    relying on this.
     """
     text = criterion.description.lower()
     if "age" in text and ">=" in text:
         try:
             threshold = int("".join(filter(str.isdigit, text.split(">=")[1])))
-            return patient.age >= threshold
+            return patient.age >= threshold, _confidence_from_margin(patient.age - threshold)
         except (ValueError, IndexError):
-            return False
+            return False, LOW_CONFIDENCE
     if "diabetes" in text:
-        return any("diabetes" in d.lower() for d in patient.diagnosis)
+        if not patient.diagnosis:
+            return False, LOW_CONFIDENCE  # no diagnosis data to go on
+        return any("diabetes" in d.lower() for d in patient.diagnosis), HIGH_CONFIDENCE
     if "egfr" in text:
-        return patient.lab_values.get("eGFR", 100) < 30
-    return False
+        if "eGFR" not in patient.lab_values:
+            return False, LOW_CONFIDENCE  # missing lab value
+        egfr = patient.lab_values["eGFR"]
+        return egfr < 30, _confidence_from_margin(egfr - 30)
+    return False, LOW_CONFIDENCE  # unrecognized criterion type -- can't assess confidently
 
 
 # ---------------------------------------------------------------------------
