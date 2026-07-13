@@ -93,8 +93,10 @@ cd eval
 python evaluate.py
 ```
 
-This runs the agent against 6 test patients (including 2 boundary
-edge cases) using the built-in mock LLM, and prints an accuracy report.
+This runs the agent against 10 test patients (including boundary
+cases, missing-data cases, and one deliberately-included case that
+the deterministic mock gets wrong -- see "Honest limitations" below)
+using the built-in mock LLM, and prints an accuracy report.
 
 ### Run the API
 
@@ -169,7 +171,11 @@ particular:
 
 - The mock LLM uses simple keyword heuristics, not real reasoning —
   it exists purely to make the pipeline runnable and testable without
-  cost. Real protocol text is far messier than the examples here.
+  cost. Real protocol text is far messier than the examples here. This
+  is exercised deliberately in `eval/test_cases.json` (case P009),
+  where a Type 1 vs. Type 2 diabetes mismatch is confidently
+  misclassified — a concrete illustration of why the mock is a
+  scaffold for the architecture, not a stand-in for clinical judgment.
 - Confidence scoring is illustrative; a production system would need
   a properly calibrated, validated confidence model.
 - There is no de-identification, audit logging, or access control —

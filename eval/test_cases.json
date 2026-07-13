@@ -79,6 +79,58 @@
       },
       "expected_eligible": true,
       "description": "Edge case: exactly at the minimum age boundary."
+    },
+    {
+      "patient": {
+        "patient_id": "P007",
+        "age": 40,
+        "sex": "male",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": [],
+        "lab_values": {},
+        "notes": "No recent renal panel on file."
+      },
+      "expected_eligible": true,
+      "description": "Missing eGFR lab value: exclusion criterion can't be confidently assessed, so nothing excludes the patient, but the verdict should be flagged for review rather than trusted outright."
+    },
+    {
+      "patient": {
+        "patient_id": "P008",
+        "age": 50,
+        "sex": "female",
+        "diagnosis": [],
+        "medications": [],
+        "lab_values": {"eGFR": 80.0},
+        "notes": "Diagnosis history not available in this record."
+      },
+      "expected_eligible": false,
+      "description": "Missing diagnosis data: inclusion criterion can't be confirmed, so it is conservatively treated as not met and flagged for review."
+    },
+    {
+      "patient": {
+        "patient_id": "P009",
+        "age": 45,
+        "sex": "male",
+        "diagnosis": ["Type 1 Diabetes"],
+        "medications": ["Insulin"],
+        "lab_values": {"eGFR": 75.0},
+        "notes": "Diagnosed with Type 1 diabetes since childhood."
+      },
+      "expected_eligible": false,
+      "description": "Known mock-LLM limitation: naive keyword matching cannot distinguish Type 1 from Type 2 diabetes, so it confidently mismatches this patient as eligible. A real LLM call would reason over the distinction; this case documents where the deterministic mock's simplicity breaks down."
+    },
+    {
+      "patient": {
+        "patient_id": "P010",
+        "age": 19,
+        "sex": "female",
+        "diagnosis": ["Type 2 Diabetes"],
+        "medications": ["Metformin"],
+        "lab_values": {"eGFR": 29.5},
+        "notes": "Recently diagnosed, renal function borderline."
+      },
+      "expected_eligible": false,
+      "description": "Compound boundary case: near-minimum age and eGFR just below the exclusion cutoff at the same time."
     }
   ]
 }
